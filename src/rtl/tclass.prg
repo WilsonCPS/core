@@ -67,9 +67,18 @@
  *
  */
 
-/* NOTE: This .prg is also used by the debugger subsystem,
+ /*
+  *
+  * WILSON ANDRADE
+  *    27/07/2014
+  *
+  *    Add newer function to manipulate propertyes and events
+ */
+
+ /* NOTE: This .prg is also used by the debugger subsystem,
          therefore we need this switch to avoid an infinite
          loop when launching it. [vszakats] */
+
 #pragma -b-
 
 /* Harbour Class HBClass to build classes */
@@ -89,15 +98,18 @@ FUNCTION HBClass()
       BEGIN SEQUENCE
 
 #if 0
-         hClass := __clsNew( "HBCLASS", 17,, @HBClass() )
+         hClass := __clsNew( "HBCLASS", 20,, @HBClass() )
 #else
-         hClass := __clsNew( "HBCLASS", 16,, @HBClass() )
+         hClass := __clsNew( "HBCLASS", 19,, @HBClass() )
 #endif
 
          __clsAddMsg( hClass, "New"            , @New()            , HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "Create"         , @Create()         , HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "AddData"        , @AddData()        , HB_OO_MSG_METHOD )
+
+
          __clsAddMsg( hClass, "AddMultiData"   , @AddMultiData()   , HB_OO_MSG_METHOD )
+
          __clsAddMsg( hClass, "AddClassData"   , @AddClassData()   , HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "AddMultiClsData", @AddMultiClsData(), HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "AddInline"      , @AddInline()      , HB_OO_MSG_METHOD )
@@ -111,6 +123,17 @@ FUNCTION HBClass()
          __clsAddMsg( hClass, "SetOnError"     , @SetOnError()     , HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "SetDestructor"  , @SetDestructor()  , HB_OO_MSG_METHOD )
          __clsAddMsg( hClass, "InitClass"      , @InitClass()      , HB_OO_MSG_METHOD )
+
+
+         __clsAddMsg( hClass, "AddEvent"           , @AddEvent()           , HB_OO_MSG_METHOD )
+         __clsAddMsg( hClass, "AddProperty"        , @AddProperty()        , HB_OO_MSG_METHOD )
+         __clsAddMsg( hClass, "SetPropertyValue"   , @SetPropertyValue()   , HB_OO_MSG_METHOD )
+
+         __clsAddMsg( hClass, "ModInline"            , @ModInline()            , HB_OO_MSG_METHOD )
+         __clsAddMsg( hClass, "ModMethod"            , @ModMethod()            , HB_OO_MSG_METHOD )
+         __clsAddMsg( hClass, "ModClsMethod"         , @ModClsMethod()         , HB_OO_MSG_METHOD )
+
+
          __clsAddMsg( hClass, "cSuper"         , {| Self | iif( Empty( ::asSuper ), NIL, ::asSuper[ 1 ]:name ) }, HB_OO_MSG_INLINE )
          __clsAddMsg( hClass, "hClass"         ,  1, HB_OO_MSG_ACCESS )
          __clsAddMsg( hClass, "_hClass"        ,  1, HB_OO_MSG_ASSIGN )
@@ -145,9 +168,13 @@ FUNCTION HBClass()
          __clsAddMsg( hClass, "_asFriendFunc"  , 15, HB_OO_MSG_ASSIGN )
          __clsAddMsg( hClass, "sClassFunc"     , 16, HB_OO_MSG_ACCESS )
          __clsAddMsg( hClass, "_sClassFunc"    , 16, HB_OO_MSG_ASSIGN )
+
+         __clsAddMsg( hClass, "aEvents"        , 17, HB_OO_MSG_PROPERTY )
+         __clsAddMsg( hClass, "aProperties"    , 18, HB_OO_MSG_PROPERTY )
+
 #if 0
-         __clsAddMsg( hClass, "class"          , 17, HB_OO_MSG_ACCESS )
-         __clsAddMsg( hClass, "_class"         , 17, HB_OO_MSG_ASSIGN )
+         __clsAddMsg( hClass, "class"          , 19, HB_OO_MSG_ACCESS )
+         __clsAddMsg( hClass, "_class"         , 19, HB_OO_MSG_ASSIGN )
 #endif
 
       ALWAYS
@@ -203,6 +230,11 @@ STATIC FUNCTION New( cClassName, xSuper, sClassFunc, lModuleFriendly )
    ::asFriendClass := {}
    ::asFriendFunc  := {}
 
+
+   ::aEvents     := {}
+   ::aProperties := {}
+
+
    RETURN QSelf()
 
 STATIC PROCEDURE Create( /* MetaClass */ )
@@ -212,6 +244,7 @@ STATIC PROCEDURE Create( /* MetaClass */ )
    LOCAL nClassBegin
    LOCAL hClass
    LOCAL ahSuper := {}
+   LOCAL Ok
 
 #if 0
    Self:Class := MetaClass
@@ -246,18 +279,28 @@ STATIC PROCEDURE Create( /* MetaClass */ )
    /* local messages... */
 
    FOR EACH n IN ::aDatas
-      __clsAddMsg( hClass, n[ HB_OO_DATA_SYMBOL ]       , n:__enumIndex(), ;
-                   HB_OO_MSG_ACCESS, n[ HB_OO_DATA_VALUE ], n[ HB_OO_DATA_SCOPE ] )
-      __clsAddMsg( hClass, "_" + n[ HB_OO_DATA_SYMBOL ] , n:__enumIndex(), ;
-                   HB_OO_MSG_ASSIGN, n[ HB_OO_DATA_TYPE ] , n[ HB_OO_DATA_SCOPE ] )
+
+       IF !n[7] // not is property
+
+         __clsAddMsg( hClass, n[ HB_OO_DATA_SYMBOL ]       , n:__enumIndex(), ;
+                      HB_OO_MSG_ACCESS, n[ HB_OO_DATA_VALUE ], n[ HB_OO_DATA_SCOPE ] )
+         __clsAddMsg( hClass, "_" + n[ HB_OO_DATA_SYMBOL ] , n:__enumIndex(), ;
+                      HB_OO_MSG_ASSIGN, n[ HB_OO_DATA_TYPE ] , n[ HB_OO_DATA_SCOPE ] )
+
+       ELSE
+         __clsAddMsg( hClass, n[ HB_OO_DATA_SYMBOL ]       , n:__enumIndex(), ;
+                        HB_OO_MSG_PROPERTY, n[ HB_OO_DATA_VALUE ], n[ HB_OO_DATA_SCOPE ] )
+       ENDIF
+
    NEXT
 
    FOR EACH n IN ::aMethods
-      __clsAddMsg( hClass, n[ HB_OO_MTHD_SYMBOL ], n[ HB_OO_MTHD_PFUNCTION ],;
+         __clsAddMsg( hClass, n[ HB_OO_MTHD_SYMBOL ], n[ HB_OO_MTHD_PFUNCTION ],;
                    HB_OO_MSG_METHOD, NIL, n[ HB_OO_MTHD_SCOPE ] )
    NEXT
 
    nClassBegin := __cls_CntClsData( hClass )
+
    FOR EACH n IN ::aClsDatas
       __clsAddMsg( hClass, n[ HB_OO_CLSD_SYMBOL ]      , n:__enumIndex() + nClassBegin,;
                    HB_OO_MSG_CLSACCESS, n[ HB_OO_CLSD_VALUE ], n[ HB_OO_CLSD_SCOPE ] )
@@ -266,7 +309,8 @@ STATIC PROCEDURE Create( /* MetaClass */ )
    NEXT
 
    FOR EACH n IN ::aInlines
-      __clsAddMsg( hClass, n[ HB_OO_MTHD_SYMBOL ], n[ HB_OO_MTHD_PFUNCTION ],;
+
+         __clsAddMsg( hClass, n[ HB_OO_MTHD_SYMBOL ], n[ HB_OO_MTHD_PFUNCTION ],;
                    HB_OO_MSG_INLINE, NIL, n[ HB_OO_MTHD_SCOPE ] )
    NEXT
 
@@ -306,7 +350,7 @@ STATIC FUNCTION Instance()
 
    RETURN __clsInst( ::hClass )
 
-STATIC PROCEDURE AddData( cData, xInit, cType, nScope, lNoinit )
+STATIC PROCEDURE AddData( cData, xInit, cType, nScope, lNoinit , lPersistent ,lAsFunc , lProperty )
 
    hb_default( @lNoInit, .F. )
    hb_default( @nScope, HB_OO_CLSTP_EXPORTED )
@@ -335,17 +379,21 @@ STATIC PROCEDURE AddData( cData, xInit, cType, nScope, lNoinit )
       ENDSWITCH
    ENDIF
 
-   AAdd( QSelf():aDatas, { cData, xInit, cType, nScope } )
+   lAsFunc    := if(hb_isnil( lAsFunc ) , .T. , lASFunc    )
+
+   lProperty  := if(hb_isnil( lProperty ) , .F., lProperty )
+
+   AAdd( QSelf():aDatas, { cData, xInit, cType, nScope, lPersistent ,lAsFunc , lProperty } )
 
    RETURN
 
-STATIC PROCEDURE AddMultiData( cType, xInit, nScope, aData, lNoInit )
+STATIC PROCEDURE AddMultiData( cType, xInit, nScope, aData, lNoInit , lPersistent )
 
    LOCAL cData
 
    FOR EACH cData IN aData
       IF HB_ISSTRING( cData )
-         QSelf():AddData( cData, xInit, cType, nScope, lNoInit )
+         QSelf():AddData( cData, xInit, cType, nScope, lNoInit , lPersistent )
       ENDIF
    NEXT
 
@@ -398,19 +446,19 @@ STATIC PROCEDURE AddMultiClsData( cType, xInit, nScope, aData, lNoInit )
 
    RETURN
 
-STATIC PROCEDURE AddInline( cMethod, bCode, nScope )
+STATIC PROCEDURE AddInline( cMethod, bCode, nScope, lPersistent  )
 
    hb_default( @nScope, HB_OO_CLSTP_EXPORTED )
 
-   AAdd( QSelf():aInlines, { cMethod, bCode, nScope } )
+   AAdd( QSelf():aInlines, { cMethod, bCode, nScope , lPersistent, .T. } )
 
    RETURN
 
-STATIC PROCEDURE AddMethod( cMethod, sFuncSym, nScope )
+STATIC PROCEDURE AddMethod( cMethod, sFuncSym, nScope, lPersistent  )
 
    hb_default( @nScope, HB_OO_CLSTP_EXPORTED )
 
-   AAdd( QSelf():aMethods, { cMethod, sFuncSym, nScope } )
+   AAdd( QSelf():aMethods, { cMethod, sFuncSym, nScope , lPersistent , .T.} )
 
    RETURN
 
@@ -474,3 +522,165 @@ STATIC PROCEDURE SetDestructor( sFuncPtr )
 
 STATIC FUNCTION InitClass()
    RETURN QSelf()
+
+
+STATIC PROCEDURE AddProperty( cProperty, uValue , ctype, uScope, lReadOnLy, uRead, uWrite )
+
+   LOCAL Self     := QSelf()
+   Local lAsRead  := !hb_IsNil( uRead )
+   Local lAsWrite := !hb_IsNil( uWrite )
+
+   IF !lAsRead
+       uRead := {|uSelf ,v | __objSendMsg(uSelf,'F' + cProperty ) }
+   ENDIF
+
+   IF !lAsWrite
+      uWrite := {|uSelf ,v | ::SetPropertyValue( uSelf , v ,cProperty ) }
+   ENDIF
+
+   AADD(::aProperties, { cProperty, uValue , cType, uScope, lReadOnLy, uRead, uWrite } )
+
+   ::AddData( 'F'+cProperty, uValue, cType, uScope, .F., .F. , uValue # Nil, .T. )
+
+   IF VALTYPE( uRead ) = 'S'
+      ::ModMethod( cProperty , uRead , uScope , .F. , lASRead)
+   ELSEIF Valtype(uRead)    =='C'
+      ::ModInline( cProperty , {|iSelf| iSelf:&(uRead)  }, uScope , .F. , lASRead)
+   ELSEIF Valtype(uRead) == 'B'
+      ::ModInline( cProperty , uRead , uScope , .F. , lASRead)
+   ELSE
+      ::ModInline( cProperty , {|Self| ::&('F'+cProperty) } , uScope , .F. ,lASRead)
+   ENDIF
+
+   IF VALTYPE( uWrite ) = 'S'
+      ::ModMethod( "_" + cProperty , uWrite , uScope , .F. , .T. )
+   ELSEIF Valtype(uWrite)    =='C'
+      ::ModInline( "_"+ cProperty , {|iSelf,a,b,c,d,e,f,g,h| __objSendMsg(iSelf,uWrite,a,b,c,d,e,f,g,h)  }, uScope , .F. , .T.)
+   ELSE
+      ::ModInline( "_"+cProperty , uWrite , uScope , .F. ,lAsWrite )
+   ENDIF
+
+RETURN
+
+//----------------------------------------------------------------------------//
+STATIC PROCEDURE AddEvent( cEvent )
+//----------------------------------------------------------------------------//
+   LOCAL Self:=QSelf()
+
+   AADD( ::aEvents , { cEvent } )
+
+   ::AddData( 'F'+cEvent, Nil, Nil, , .F., .F. ,, .T. )
+   ::AddMethod( cEvent , @EventRun() , , .T. )
+   ::AddInline( "_" + cEvent , {|uSelf ,v | ::SetPropertyValue( uSelf , v ,cEvent ) }, , .T. )
+
+RETURN
+
+//----------------------------------------------------------------------------//
+STATIC FUNCTION EventRun(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,x,y,z )
+//----------------------------------------------------------------------------//
+   Local Self   := QSelf()
+   Local cEvent := __getmessage()
+   Local aParams
+   Local uMethod
+   Local uRet
+   Local oControl
+
+   IF !EMPTY( cEvent )
+
+      uMethod := ::&( "F" + cEvent )
+
+      IF !Empty( uMethod )
+
+         IF hb_isBlock( uMethod )
+            uRet:=Eval(uMethod,Self, @a,@b,@c,@d,@e,@f,@g,@h,@i,@j,@k,@l,@m,@n,@o,@p,@q,@r,@s,@t,@u,@v,@x,@y,@z)
+         ELSE
+
+            oControl := Self
+
+            DO WHILE !__objHasMsg( oControl , uMethod )
+
+               IF oControl:isKindOf( 'HBCOMPONENT' ) .AND. hb_isObject( oControl:oParent )
+                  oControl := oControl:oParent
+               ELSE
+                  oControl := Nil
+                  EXIT
+               ENDIF
+
+            ENDDO
+
+            IF hb_isobject( oControl ) .AND. __objHasMsg( oControl , uMethod )
+
+               aParams := {Self , @a,@b,@c,@d,@e,@f,@g,@h,@i,@j,@k,@l,@m,@n,@o,@p,@q,@r,@s,@t,@u,@v,@x,@y,@z}
+
+               uRet    := HB_ExecFromArray( oControl, uMethod , aParams )
+
+            ENDIF
+
+         ENDIF
+
+      ENDIF
+
+   ENDIF
+
+RETURN uRet
+
+//----------------------------------------------------------------------------//
+STATIC FUNCTION SetPropertyValue(Self,v,cProperty)
+//----------------------------------------------------------------------------//
+   LOCAL uOldValue := ::&( 'F'+cProperty )
+
+   ::&('F'+cProperty ) := v
+
+RETURN uOldValue
+
+
+//----------------------------------------------------------------------------//
+STATIC PROCEDURE ModInline( cMethod, bCode, nScope, lPersistent ,lAsFunc )
+//----------------------------------------------------------------------------//
+   LOCAL nAt
+   LOCAL Self := QSelf()
+
+   lAsFunc:=if(hb_isnil(lAsFunc),.F.,lASFunc)
+
+   IF ( nAt := AScan( ::aInlines, {|a| Upper(Alltrim(a[1])) == Upper(Alltrim( cMethod )) } ) ) > 0
+      ::aInlines[ nAt ] := { cMethod, bCode, nScope, lPersistent ,lAsFunc }
+   ELSE
+      AAdd( ::aInlines, { cMethod, bCode, nScope, lPersistent ,lAsFunc } )
+   ENDIF
+
+RETURN
+
+//----------------------------------------------------------------------------//
+STATIC PROCEDURE ModMethod( cMethod, nFuncPtr, nScope, lPersistent , lAsFunc )
+//----------------------------------------------------------------------------//
+   LOCAL Self:=QSelf()
+   LOCAL nAt
+
+
+   lAsFunc:=if(hb_isnil(lAsFunc),.F.,lASFunc)
+
+   IF !lAsFunc
+      nFuncPtr := Nil
+   ENDIF
+
+   IF ( nAt := AScan( ::aMethods, {|a| Upper(Alltrim(a[1])) == Upper(Alltrim(cMethod)) } ) ) > 0
+      ::aMethods[ nAt ] := { cMethod, nFuncPtr, nScope, lPersistent ,lAsFunc }
+   ELSE
+      AAdd( ::aMethods, { cMethod, nFuncPtr, nScope, lPersistent ,lAsFunc } )
+   ENDIF
+
+RETURN
+
+//----------------------------------------------------------------------------//
+STATIC PROCEDURE ModClsMethod( cMethod, nFuncPtr, nScope )
+//----------------------------------------------------------------------------//
+   LOCAL Self:=QSelf()
+   LOCAL nAt
+
+   IF ( nAt := AScan( ::aClsMethods, {|a| a[1] == cMethod } ) ) > 0
+      ::aClsMethods[ nAt ] := { cMethod, nFuncPtr, nScope }
+   ELSE
+      AAdd( ::aClsMethods, { cMethod, nFuncPtr, nScope } )
+   ENDIF
+
+RETURN
